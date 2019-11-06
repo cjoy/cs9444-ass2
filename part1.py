@@ -30,17 +30,23 @@ class rnn(torch.nn.Module):
               some input (inputDim = 64) and the current hidden state
               (hiddenDim = 128), and return the new hidden state.
         """
+        return torch.tanh(self.hh(hidden) + self.ih(input))
 
     def forward(self, input):
         hidden = torch.zeros(128)
         """
         TODO: Using self.rnnCell, create a model that takes as input
-              a sequence of size [seqLength, batchSize, inputDim]
+              a sequence of size 
               and passes each input through the rnn sequentially,
               updating the (initally zero) hidden state.
               Return the final hidden state after the
               last input in the sequence has been processed.
         """
+        [seqLength, batchSize, inputDim] = input.size()
+        for i in range(seqLength):
+            hidden = self.rnnCell(input[i], hidden)
+        return hidden
+
 
 class rnnSimplified(torch.nn.Module):
 
@@ -51,11 +57,10 @@ class rnnSimplified(torch.nn.Module):
               the network defined by this class is equivalent to the
               one defined in class "rnn".
         """
-        self.net = None
+        self.net = torch.nn.RNN(64, 128, 1)
 
     def forward(self, input):
         _, hidden = self.net(input)
-
         return hidden
 
 def lstm(input, hiddenSize):
@@ -63,7 +68,8 @@ def lstm(input, hiddenSize):
     TODO: Let variable lstm be an instance of torch.nn.LSTM.
           Variable input is of size [batchSize, seqLength, inputDim]
     """
-    lstm = None
+    batchSize, seqLength, inputDim = torch.size(input)
+    lstm = nn.LSTM(input_size=seqLength, hidden_size=hiddenSize, num_layers=2)
     return lstm(input)
 
 def conv(input, weight):
