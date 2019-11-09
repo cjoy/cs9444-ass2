@@ -61,11 +61,14 @@ class NetworkLstm(tnn.Module):
         #return out
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         hidden = (torch.zeros(1, 64, 100).to(device), torch.zeros(1, 64, 100).to(device))
+        out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
+        out, hidden = self.lstm(out, hidden)
+        out, _ = tnn.utils.rnn.pad_packed_sequence(out, batch_first=True)
         print(input.size())
         print(length)
-        out, hidden = self.lstm(input, hidden)
+        print(out)
         print(out.size())
-        out = out.reshape(64, 100)
+        out = out.contiguous().view(-1, out.shape[2])
         print(out.size())
         out = tnn.functional.relu(self.fc1(out))
         out = self.fc2(out)
@@ -101,7 +104,8 @@ class NetworkCnn(tnn.Module):
         TODO:
         Create the forward pass through the network.
         """
-
+        
+        
 
 def lossFunc():
     """
@@ -175,7 +179,7 @@ def main():
 
 #             running_loss += loss.item()
             
-            if 1 == 1:
+            if true:
                 break
 
             if i % 32 == 31:
