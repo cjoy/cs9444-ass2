@@ -40,6 +40,9 @@ class NetworkLstm(tnn.Module):
         TODO:
         Create and initialise weights and biases for the layers.
         """
+        self.lstm = tnn.LSTM(50, 100, batch_first=True)
+        self.fc1 = tnn.Linear(100, 64)
+        self.fc2 = tnn.Linear(64, 1)
 
     def forward(self, input, length):
         """
@@ -47,7 +50,26 @@ class NetworkLstm(tnn.Module):
         TODO:
         Create the forward pass through the network.
         """
+        #out = torch.zeros(length)
+        #for i in range(length):
+        #    out, self.hidden = self.lstm(input[i], self.hidden)
 
+        #out = out.view(-1, 100)
+        #out = F.relu(self.fc1(out))
+        #out = self.fc2(out)
+        
+        #return out
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        hidden = (torch.zeros(1, 64, 100).to(device), torch.zeros(1, 64, 100).to(device))
+        print(input.size())
+        print(length)
+        out, hidden = self.lstm(input, hidden)
+        print(out.size())
+        out = out.reshape(64, 100)
+        print(out.size())
+        out = tnn.functional.relu(self.fc1(out))
+        out = self.fc2(out)
+        print(out.size())
 
 # Class for creating the neural network.
 class NetworkCnn(tnn.Module):
@@ -88,6 +110,7 @@ def lossFunc():
     will add a sigmoid to the output and calculate the binary
     cross-entropy.
     """
+#     return tnn.functional.binary_cross_entropy(tnn.functional.sigmoid(output), labels)
 
 
 def measures(outputs, labels):
@@ -137,20 +160,23 @@ def main():
 
             # PyTorch calculates gradients by accumulating contributions to them (useful for
             # RNNs).  Hence we must manually set them to zero before calculating them.
-            optimiser.zero_grad()
+#             optimiser.zero_grad()
 
             # Forward pass through the network.
             output = net(inputs, length)
 
-            loss = criterion(output, labels)
+#             loss = criterion(output, labels)
 
             # Calculate gradients.
-            loss.backward()
+#             loss.backward()
 
             # Minimise the loss according to the gradient.
-            optimiser.step()
+#             optimiser.step()
 
-            running_loss += loss.item()
+#             running_loss += loss.item()
+            
+            if 1 == 1:
+                break
 
             if i % 32 == 31:
                 print("Epoch: %2d, Batch: %4d, Loss: %.3f" % (epoch + 1, i + 1, running_loss / 32))
@@ -158,29 +184,29 @@ def main():
 
     true_pos, true_neg, false_pos, false_neg = 0, 0, 0, 0
 
-    # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
-    # computations and reduce memory usage.
-    with torch.no_grad():
-        for batch in testLoader:
-            # Get a batch and potentially send it to GPU memory.
-            inputs, length, labels = textField.vocab.vectors[batch.text[0]].to(device), batch.text[1].to(
-                device), batch.label.type(torch.FloatTensor).to(device)
+#     # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
+#     # computations and reduce memory usage.
+#     with torch.no_grad():
+#         for batch in testLoader:
+#             # Get a batch and potentially send it to GPU memory.
+#             inputs, length, labels = textField.vocab.vectors[batch.text[0]].to(device), batch.text[1].to(
+#                 device), batch.label.type(torch.FloatTensor).to(device)
 
-            labels -= 1
+#             labels -= 1
 
-            outputs = net(inputs, length)
+#             outputs = net(inputs, length)
 
-            tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
-            true_pos += tp_batch
-            true_neg += tn_batch
-            false_pos += fp_batch
-            false_neg += fn_batch
+#             tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
+#             true_pos += tp_batch
+#             true_neg += tn_batch
+#             false_pos += fp_batch
+#             false_neg += fn_batch
 
-    accuracy = 100 * (true_pos + true_neg) / len(dev)
-    matthews = MCC(true_pos, true_neg, false_pos, false_neg)
+#     accuracy = 100 * (true_pos + true_neg) / len(dev)
+#     matthews = MCC(true_pos, true_neg, false_pos, false_neg)
 
-    print("Classification accuracy: %.2f%%\n"
-          "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
+#     print("Classification accuracy: %.2f%%\n"
+#           "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
 
 
 # Matthews Correlation Coefficient calculation.
