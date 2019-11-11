@@ -34,12 +34,16 @@ class NetworkLstm(tnn.Module):
     Output should be 1d tensor of shape [batch_size].
     """
 
+
     def __init__(self):
         super(NetworkLstm, self).__init__()
         """
         TODO:
         Create and initialise weights and biases for the layers.
         """
+        self.lstm = tnn.LSTM(50, 100, batch_first=True)
+        self.fc1 = tnn.Linear(100, 64)
+        self.fc2 = tnn.Linear(64, 1)
 
     def forward(self, input, length):
         """
@@ -47,6 +51,16 @@ class NetworkLstm(tnn.Module):
         TODO:
         Create the forward pass through the network.
         """
+        batchSize, _, _ = input.size()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        h0 = torch.randn(1, batchSize, 100).to(device)
+        c0 = torch.randn(1, batchSize, 100).to(device)
+        out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
+        out, (hn, cn) = self.lstm(out, (h0, c0))
+        out = tnn.functional.relu(self.fc1(hn))
+        out = self.fc2(out)
+        out = out.view(batchSize, -1)[:, -1]
+        return out
 
 
 # Class for creating the neural network.
@@ -88,6 +102,7 @@ def lossFunc():
     will add a sigmoid to the output and calculate the binary
     cross-entropy.
     """
+    return tnn.BCEWithLogitsLoss()
 
 
 def measures(outputs, labels):
@@ -99,6 +114,14 @@ def measures(outputs, labels):
 
     outputs and labels are torch tensors.
     """
+    # Inspired by:
+    # https://gist.github.com/the-bass/cae9f3976866776dea17a5049013258d
+    vec = torch.sigmoid(outputs).round()/labels
+    tp = torch.sum(vec == 1).item()
+    tn = torch.sum(torch.isnan(vec)).item()
+    fp = torch.sum(vec == float('inf')).item()
+    fn = torch.sum(vec == 0).item()
+    return tp, tn, fp, fn
 
 
 def main():
