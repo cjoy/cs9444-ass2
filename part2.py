@@ -53,15 +53,14 @@ class NetworkLstm(tnn.Module):
         batchSize, _, _ = input.size()
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.hidden = (torch.randn(1, batchSize, 100).to(device), torch.randn(1, batchSize, 100).to(device))
-        out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
-        out, self.hidden = self.lstm(out, self.hidden)
-        out, _ = tnn.utils.rnn.pad_packed_sequence(out, batch_first=True)
-
-        out = out.contiguous().view(-1, out.shape[2])
+        self.hidden = (torch.zeros(1, batchSize, 100).to(device), torch.zeros(1, batchSize, 100).to(device))
+#         out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
+#         out, (h_n, c_n) = self.lstm(out, self.hidden)
+        out, (h_n, c_n) = self.lstm(input, self.hidden)
+        out = h_n.transpose(0,1).contiguous().view(batchSize, -1)
         out = tnn.functional.relu(self.fc1(out))
         out = self.fc2(out)
-        out = out.view(batchSize, -1)[:, -1]
+        out = out.view(batchSize)
 
         return out
 
@@ -88,6 +87,24 @@ class NetworkCnn(tnn.Module):
         TODO:
         Create and initialise weights and biases for the layers.
         """
+        self.conv1 = tnn.Sequential(
+            tnn.Conv1d(50, 50, kernel_size = 8, padding = 5),
+            tnn.ReLU(),
+            tnn.MaxPool1d(kernel_size=4)
+        )
+
+        self.conv2 = tnn.Sequential(
+            tnn.Conv1d(50, 50, kernel_size = 8, padding = 5),
+            tnn.ReLU(),
+            tnn.MaxPool1d(kernel_size=4)
+        )            
+            
+        self.conv3 = tnn.Sequential(
+            tnn.Conv1d(50, 50, kernel_size = 8, padding = 5),
+            tnn.ReLU(),
+        )
+        
+        self.fc1 = tnn.Linear(50, 1)
 
     def forward(self, input, length):
         """
@@ -95,8 +112,14 @@ class NetworkCnn(tnn.Module):
         TODO:
         Create the forward pass through the network.
         """
-        
-        
+        batchSize, _, _ = input.size()
+        out = input.permute(0, 2, 1)
+        out = self.conv1(out)
+        out = self.conv2(out)
+        out = torch.max(self.conv3(out).permute(0, 2, 1), 1)[0]
+        out = self.fc1(out)
+        out = out.view(batchSize)
+        return out
 
 def lossFunc():
     """
@@ -117,6 +140,15 @@ def measures(outputs, labels):
 
     outputs and labels are torch tensors.
     """
+    # Inspired by:
+    # https://gist.github.com/the-bass/cae9f3976866776dea17a5049013258d
+    sigm = tnn.Sigmoid()
+    vec = sigm(outputs).round()/labels
+    tp = torch.sum(vec == 1).item()
+    tn = torch.sum(torch.isnan(vec)).item()
+    fp = torch.sum(vec == float('inf')).item()
+    fn = torch.sum(vec == 0).item()
+    return tp, tn, fp, fn
 
 
 def main():
@@ -138,7 +170,7 @@ def main():
                                                          sort_key=lambda x: len(x.text), sort_within_batch=True)
 
     # Create an instance of the network in memory (potentially GPU memory). Can change to NetworkCnn during development.
-    net = NetworkLstm().to(device)
+    net = NetworkCnn().to(device)
 
     criterion = lossFunc()
     optimiser = topti.Adam(net.parameters(), lr=0.001)  # Minimise the loss using the Adam algorithm.
@@ -176,29 +208,55 @@ def main():
 
     true_pos, true_neg, false_pos, false_neg = 0, 0, 0, 0
 
-#     # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
-#     # computations and reduce memory usage.
-#     with torch.no_grad():
-#         for batch in testLoader:
-#             # Get a batch and potentially send it to GPU memory.
-#             inputs, length, labels = textField.vocab.vectors[batch.text[0]].to(device), batch.text[1].to(
-#                 device), batch.label.type(torch.FloatTensor).to(device)
+    # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
+    # computations and reduce memory usage.
+    with torch.no_grad():
+        for batch in testLoader:
+            # Get a batch and potentially send it to GPU memory.
+            inputs, length, labels = textField.vocab.vectors[batch.text[0]].to(device), batch.text[1].to(
+                device), batch.label.type(torch.FloatTensor).to(device)
 
-#             labels -= 1
+            labels -= 1
 
-#             outputs = net(inputs, length)
+            outputs = net(inputs, length)
 
-#             tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
-#             true_pos += tp_batch
-#             true_neg += tn_batch
-#             false_pos += fp_batch
-#             false_neg += fn_batch
+            tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
+            true_pos += tp_batch
+            true_neg += tn_batch
+            false_pos += fp_batch
+            false_neg += fn_batch
 
-#     accuracy = 100 * (true_pos + true_neg) / len(dev)
-#     matthews = MCC(true_pos, true_neg, false_pos, false_neg)
+    accuracy = 100 * (true_pos + true_neg) / len(dev)
+    matthews = MCC(true_pos, true_neg, false_pos, false_neg)
 
-#     print("Classification accuracy: %.2f%%\n"
-#           "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
+    print("Classification accuracy: %.2f%%\n"
+          "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
+
+
+# Matthews Correlation Coefficient calculation.
+def MCC(tp, tn, fp, fn):
+    numerator = tp * tn - fp * fn
+    denominator = ((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)) ** 0.5
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.divide(numerator, denominator)
+
+
+if __name__ == '__main__':
+    main()
+            outputs = net(inputs, length)
+
+            tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
+            true_pos += tp_batch
+            true_neg += tn_batch
+            false_pos += fp_batch
+            false_neg += fn_batch
+
+    accuracy = 100 * (true_pos + true_neg) / len(dev)
+    matthews = MCC(true_pos, true_neg, false_pos, false_neg)
+
+    print("Classification accuracy: %.2f%%\n"
+          "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
 
 
 # Matthews Correlation Coefficient calculation.
