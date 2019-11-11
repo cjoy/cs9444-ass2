@@ -18,7 +18,6 @@ class rnn(torch.nn.Module):
 
     def __init__(self):
         super(rnn, self).__init__()
-
         self.ih = torch.nn.Linear(64, 128)
         self.hh = torch.nn.Linear(128, 128)
 
@@ -42,7 +41,7 @@ class rnn(torch.nn.Module):
               Return the final hidden state after the
               last input in the sequence has been processed.
         """
-        [seqLength, batchSize, inputDim] = input.size()
+        seqLength, _, _ = input.size()
         for i in range(seqLength):
             hidden = self.rnnCell(input[i], hidden)
         return hidden
@@ -68,7 +67,7 @@ def lstm(input, hiddenSize):
     TODO: Let variable lstm be an instance of torch.nn.LSTM.
           Variable input is of size [batchSize, seqLength, inputDim]
     """
-    [batchSize, seqLength, inputDim] = input.size()
+    _, _, inputDim = input.size()
     lstm = torch.nn.LSTM(inputDim, hiddenSize, batch_first=True)
     return lstm(input)
 
@@ -79,7 +78,5 @@ def conv(input, weight):
           The convolution should be along the sequence axis.
           input is of size [batchSize, inputDim, seqLength]
     """
-    [batchSize, inputDim, seqLength] = input.size()
-    conv = torch.nn.functional.conv1d(input, weight)
-    return conv
+    return torch.nn.functional.conv1d(input, weight)
     
