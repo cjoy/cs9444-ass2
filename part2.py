@@ -52,7 +52,6 @@ class NetworkLstm(tnn.Module):
         Create the forward pass through the network.
         """
         batchSize, _, _ = input.size()
-<<<<<<< HEAD
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         h0 = torch.randn(1, batchSize, 100).to(device)
         c0 = torch.randn(1, batchSize, 100).to(device)
@@ -61,20 +60,6 @@ class NetworkLstm(tnn.Module):
         out = tnn.functional.relu(self.fc1(hn))
         out = self.fc2(out)
         out = out.view(batchSize, -1)[:, -1]
-        return out
-=======
->>>>>>> ines
-
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.hidden = (torch.zeros(1, batchSize, 100).to(device), torch.zeros(1, batchSize, 100).to(device))
-#         out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
-#         out, (h_n, c_n) = self.lstm(out, self.hidden)
-        out, (h_n, c_n) = self.lstm(input, self.hidden)
-        out = h_n.transpose(0,1).contiguous().view(batchSize, -1)
-        out = tnn.functional.relu(self.fc1(out))
-        out = self.fc2(out)
-        out = out.view(batchSize)
-
         return out
 
 # Class for creating the neural network.
@@ -230,33 +215,7 @@ def main():
                 device), batch.label.type(torch.FloatTensor).to(device)
 
             labels -= 1
-
-            outputs = net(inputs, length)
-
-            tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
-            true_pos += tp_batch
-            true_neg += tn_batch
-            false_pos += fp_batch
-            false_neg += fn_batch
-
-    accuracy = 100 * (true_pos + true_neg) / len(dev)
-    matthews = MCC(true_pos, true_neg, false_pos, false_neg)
-
-    print("Classification accuracy: %.2f%%\n"
-          "Matthews Correlation Coefficient: %.2f" % (accuracy, matthews))
-
-
-# Matthews Correlation Coefficient calculation.
-def MCC(tp, tn, fp, fn):
-    numerator = tp * tn - fp * fn
-    denominator = ((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)) ** 0.5
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.divide(numerator, denominator)
-
-
-if __name__ == '__main__':
-    main()
+            
             outputs = net(inputs, length)
 
             tp_batch, tn_batch, fp_batch, fn_batch = measures(outputs, labels)
