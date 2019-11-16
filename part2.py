@@ -59,7 +59,7 @@ class NetworkLstm(tnn.Module):
         out, (hn, cn) = self.lstm(out, (h0, c0))
         out = tnn.functional.relu(self.fc1(hn))
         out = self.fc2(out)
-        out = out.view(batchSize, -1)[:, -1]
+        out = out.view(batchSize)
         return out
 
 # Class for creating the neural network.
