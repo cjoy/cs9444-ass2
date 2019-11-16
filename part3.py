@@ -61,10 +61,73 @@ class PreProcessing():
     def post(batch, vocab):
         """Called after numericalization but prior to vectorization"""
         return batch
+    
+    def tokenizer(text):
+        string = text.replace('<br />', ' ')
+        string = "".join([ c if c.isalnum() else " " for c in string ])
+        return string.split()
 
-    text_field = data.Field(sequential=True, lower=True, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
+#     stops = ['i', 'me', 'my', 'myself', 'we', 'our', 
+#                     'ours', 'ourselves', 'you', 'your', 'yours', 
+#                     'yourself', 'yourselves', 'he', 'him', 'his', 
+#                     'himself', 'she', 'her', 'hers', 'herself', 
+#                     'it', 'its', 'itself', 'they', 'them', 'their', 
+#                     'theirs', 'themselves', 'what', 'which', 'who', 
+#                     'whom', 'this', 'that', 'these', 'those', 'am', 
+#                     'is', 'are', 'was', 'were', 'be', 'been', 'being', 
+#                     'have', 'has', 'had', 'having', 'do', 'does', 'did',
+#                     'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or',
+#                     'because', 'as', 'until', 'while', 'of', 'at', 
+#                     'by', 'for', 'with', 'about', 'against', 'between',
+#                     'into', 'through', 'during', 'before', 'after', 
+#                     'above', 'below', 'to', 'from', 'up', 'down', 'in',
+#                     'out', 'on', 'off', 'over', 'under', 'again', 
+#                     'further', 'then', 'once', 'here', 'there', 'when', 
+#                     'where', 'why', 'how', 'all', 'any', 'both', 'each', 
+#                     'few', 'more', 'most', 'other', 'some', 'such', 'no', 
+#                     'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 
+#                     'very', 's', 't', 'can', 'will', 'just', 'don', 
+#                     'should', 'now', 'm', '']
+    text_field = data.Field(lower=True, tokenize=tokenizer, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
 
 
+def rand_del(words, prob):
+    result = []
+    if len(words) == 1:
+        result = words
+    else:
+        for i in words:
+            if np.random.uniform(0, 1) > prob:
+                result.append(i)
+        if len(result) == 0:
+            result.append(words[np.random.randint(0, len(words))])
+    result = " ".join(result)
+    return result
+
+def rand_swap(words, n):
+    result = words.copy()
+
+    for i in range(n):
+        r1, r2, j = np.random.randint(0, len(words)), 0, 0
+        for j in range(3):
+            r2 = np.random.randint(0, len(words))
+            if r1 != r2:
+                result[r1], result[r2] = result[r2], result[r1]
+                break
+    result = " ".join(result)
+    return result
+
+def aug_sentence(text, label, text_field, label_field):
+    augmented = []
+    fields = [('text', text_field), ('label', label_field)]
+    for i in range(2):
+        rd = rand_del(text, 0.1)
+        rs = rand_swap(text, max(1, int(0.1 * len(text))))
+        rd_example = data.Example.fromlist([rd, label], fields)
+        rs_example = data.Example.fromlist([rs, label], fields)
+        augmented.extend([rd_example, rs_example])
+    return augmented
+        
 
 def lossFunc():
     """
@@ -84,6 +147,12 @@ def main():
 
     train, dev = IMDB.splits(textField, labelField, train="train", validation="dev")
 
+    aug_examples = []
+    for i in train.examples+dev.examples:
+        aug_examples.extend(aug_sentence(i.text, i.label, textField, labelField))
+    train.examples.extend(aug_examples)
+
+
     textField.build_vocab(train, dev, vectors=GloVe(name="6B", dim=50))
     labelField.build_vocab(train, dev)
 
@@ -97,7 +166,7 @@ def main():
     # TODO: epoch 100 lr 0.0003
 
     # for epoch in range(5):
-    for epoch in range(100):
+    for epoch in range(20):
         running_loss = 0
 
         for i, batch in enumerate(trainLoader):

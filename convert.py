@@ -1,5 +1,6 @@
 import torch
 from part3 import Network, PreProcessing
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 net = Network().to(device)
 print(f'Loading model..')
