@@ -6,18 +6,51 @@ import torch.optim as topti
 from torchtext import data
 from torchtext.vocab import GloVe
 from imdb_dataloader import IMDB
+import re
 
 
 # Class for creating the neural network.
 class Network(tnn.Module):
+    """
+    Implement an LSTM-based network that accepts batched 50-d
+    vectorized inputs, with the following structure:
+    LSTM(hidden dim = 100) -> Linear(64) -> ReLu-> Linear(1)
+    Assume batch-first ordering.
+    Output should be 1d tensor of shape [batch_size].
+    """
     def __init__(self):
         super(Network, self).__init__()
+        """
+        TODO:
+        Create and initialise weights and biases for the layers.
+        """
+        self.conv1 = tnn.Sequential(
+            tnn.Conv1d(50, 50, kernel_size = 8, padding = 5),
+            tnn.ReLU(),
+            tnn.MaxPool1d(kernel_size=4)
+        )
+        self.lstm = tnn.LSTM(50, 100, batch_first=True)
+        self.fc1 = tnn.Linear(100, 1)
 
     def forward(self, input, length):
         """
         DO NOT MODIFY FUNCTION SIGNATURE
+        TODO:
         Create the forward pass through the network.
         """
+        batchSize, _, _ = input.size()
+        out = input.permute(0, 2, 1)
+        out = self.conv1(out)
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        h0 = torch.randn(1, batchSize, 100).to(device)
+        c0 = torch.randn(1, batchSize, 100).to(device)
+        out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
+        out, (hn, cn) = self.lstm(out, (h0, c0))
+
+        out = self.fc1(hn)
+        out = out.view(batchSize)
+        return out
 
 
 class PreProcessing():
@@ -27,9 +60,10 @@ class PreProcessing():
 
     def post(batch, vocab):
         """Called after numericalization but prior to vectorization"""
-        return batch, vocab
+        return batch
 
-    text_field = data.Field(lower=True, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
+    text_field = data.Field(sequential=True, lower=True, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
+
 
 
 def lossFunc():
@@ -37,6 +71,7 @@ def lossFunc():
     Define a loss function appropriate for the above networks that will
     add a sigmoid to the output and calculate the binary cross-entropy.
     """
+    return tnn.BCEWithLogitsLoss()
 
 def main():
     # Use a GPU if available, as it should be faster.
@@ -57,9 +92,12 @@ def main():
 
     net = Network().to(device)
     criterion =lossFunc()
-    optimiser = topti.Adam(net.parameters(), lr=0.001)  # Minimise the loss using the Adam algorithm.
+    # optimiser = topti.Adam(net.parameters(), lr=0.001)  # Minimise the loss using the Adam algorithm.
+    optimiser = topti.Adam(net.parameters(), lr=0.0003)  # Minimise the loss using the Adam algorithm.
+    # TODO: epoch 100 lr 0.0003
 
-    for epoch in range(10):
+    # for epoch in range(5):
+    for epoch in range(100):
         running_loss = 0
 
         for i, batch in enumerate(trainLoader):
