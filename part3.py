@@ -11,26 +11,14 @@ import re
 
 # Class for creating the neural network.
 class Network(tnn.Module):
-    """
-    Implement an LSTM-based network that accepts batched 50-d
-    vectorized inputs, with the following structure:
-    LSTM(hidden dim = 100) -> Linear(64) -> ReLu-> Linear(1)
-    Assume batch-first ordering.
-    Output should be 1d tensor of shape [batch_size].
-    """
     def __init__(self):
         super(Network, self).__init__()
-        """
-        TODO:
-        Create and initialise weights and biases for the layers.
-        """
-        self.conv1 = tnn.Sequential(
-            tnn.Conv1d(50, 50, kernel_size = 8, padding = 5),
-            tnn.ReLU(),
-            tnn.MaxPool1d(kernel_size=4)
-        )
-        self.lstm = tnn.LSTM(50, 100, batch_first=True)
-        self.fc1 = tnn.Linear(100, 1)
+        self.dropout_prob = 0.5
+        self.embedding_dim = 50
+        self.hidden_dim = 128
+        self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
+        self.fc = tnn.Linear(self.hidden_dim*2, 1)
+        self.dropout = tnn.Dropout(p = self.dropout_prob)
 
     def forward(self, input, length):
         """
@@ -39,17 +27,9 @@ class Network(tnn.Module):
         Create the forward pass through the network.
         """
         batchSize, _, _ = input.size()
-        out = input.permute(0, 2, 1)
-        out = self.conv1(out)
-
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        h0 = torch.randn(1, batchSize, 100).to(device)
-        c0 = torch.randn(1, batchSize, 100).to(device)
-        out = tnn.utils.rnn.pack_padded_sequence(input, length, batch_first=True)
-        out, (hn, cn) = self.lstm(out, (h0, c0))
-
-        out = self.fc1(hn)
-        out = out.view(batchSize)
+        lstm_out,(lstm_hid,lstm_cell) = self.lstm(input)
+        hidden = self.dropout(torch.cat((lstm_hid[-2,:,:], lstm_hid[-1,:,:]), dim=1))
+        out = self.fc(hidden.squeeze(0)).view(batchSize, -1)[:, -1]
         return out
 
 
@@ -88,6 +68,7 @@ class PreProcessing():
 #                     'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 
 #                     'very', 's', 't', 'can', 'will', 'just', 'don', 
 #                     'should', 'now', 'm', '']
+
     text_field = data.Field(lower=True, tokenize=tokenizer, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
 
 
@@ -152,6 +133,11 @@ def main():
         aug_examples.extend(aug_sentence(i.text, i.label, textField, labelField))
     train.examples.extend(aug_examples)
 
+    # aug_examples = []
+    # for i in train.examples:
+    #     aug_examples.extend(aug_sentence(i.text, i.label, textField, labelField))
+    # train.examples.extend(aug_examples)
+
 
     textField.build_vocab(train, dev, vectors=GloVe(name="6B", dim=50))
     labelField.build_vocab(train, dev)
@@ -166,7 +152,7 @@ def main():
     # TODO: epoch 100 lr 0.0003
 
     # for epoch in range(5):
-    for epoch in range(20):
+    for epoch in range(10):
         running_loss = 0
 
         for i, batch in enumerate(trainLoader):
