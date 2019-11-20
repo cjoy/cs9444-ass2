@@ -15,7 +15,7 @@ class Network(tnn.Module):
         super(Network, self).__init__()
         self.dropout_prob = 0.5
         self.embedding_dim = 50
-        self.hidden_dim = 190
+        self.hidden_dim = 164
         self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
         self.fc = tnn.Linear(self.hidden_dim*2, 1)
         self.dropout = tnn.Dropout(p = self.dropout_prob)
@@ -152,7 +152,7 @@ def main():
 
     num_correct = 0
 
-    # Save mode
+    # Save model
     torch.save(net.state_dict(), "./model.pth")
     # Overide as CPU model
     cpu_device = torch.device('cpu')
