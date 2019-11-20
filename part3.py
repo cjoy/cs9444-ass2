@@ -15,7 +15,7 @@ class Network(tnn.Module):
         super(Network, self).__init__()
         self.dropout_prob = 0.5
         self.embedding_dim = 50
-        self.hidden_dim = 164
+        self.hidden_dim = 150
         self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
         self.fc = tnn.Linear(self.hidden_dim*2, 1)
         self.dropout = tnn.Dropout(p = self.dropout_prob)
@@ -117,9 +117,9 @@ def main():
 
     net = Network().to(device)
     criterion =lossFunc()
-    optimiser = topti.Adam(net.parameters(), lr=0.0003)  # Minimise the loss using the Adam algorithm.
+    optimiser = topti.Adam(net.parameters(), lr=0.00025)  # Minimise the loss using the Adam algorithm.
 
-    for epoch in range(10):
+    for epoch in range(15):
         running_loss = 0
 
         for i, batch in enumerate(trainLoader):
