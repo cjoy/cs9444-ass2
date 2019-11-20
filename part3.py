@@ -88,8 +88,8 @@ def aug_sentence(text, label, text_field, label_field):
     augmented = []
     fields = [('text', text_field), ('label', label_field)]
     for i in range(2):
-        rd = rand_del(text, 0.5)
-        rs = rand_swap(text, max(1, int(0.5 * len(text))))
+        rd = rand_del(text, 0.3)
+        rs = rand_swap(text, max(1, int(0.2 * len(text))))
         rd_example = data.Example.fromlist([rd, label], fields)
         rs_example = data.Example.fromlist([rs, label], fields)
         augmented.extend([rd_example, rs_example])
