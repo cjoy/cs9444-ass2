@@ -15,7 +15,7 @@ class Network(tnn.Module):
         super(Network, self).__init__()
         self.dropout_prob = 0.5
         self.embedding_dim = 50
-        self.hidden_dim = 150
+        self.hidden_dim = 170
         self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
         self.fc = tnn.Linear(self.hidden_dim*2, 1)
         self.dropout = tnn.Dropout(p = self.dropout_prob)
@@ -75,8 +75,8 @@ def aug_sentence(text, label, text_field, label_field):
     augmented = []
     fields = [('text', text_field), ('label', label_field)]
     for i in range(2):
-        rd = rand_del(text, 0.1)
-        rs = rand_swap(text, max(1, int(0.1 * len(text))))
+        rd = rand_del(text, 0.3)
+        rs = rand_swap(text, max(1, int(0.2 * len(text))))
         rd_example = data.Example.fromlist([rd, label], fields)
         rs_example = data.Example.fromlist([rs, label], fields)
         augmented.extend([rd_example, rs_example])
@@ -117,9 +117,9 @@ def main():
 
     net = Network().to(device)
     criterion =lossFunc()
-    optimiser = topti.Adam(net.parameters(), lr=0.00025)  # Minimise the loss using the Adam algorithm.
+    optimiser = topti.Adam(net.parameters(), lr=0.0003)  # Minimise the loss using the Adam algorithm.
 
-    for epoch in range(15):
+    for epoch in range(10):
         running_loss = 0
 
         for i, batch in enumerate(trainLoader):
