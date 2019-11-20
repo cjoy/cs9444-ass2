@@ -9,25 +9,38 @@ from imdb_dataloader import IMDB
 import re
 
 
-# Class for creating the neural network.
+# --------------------- Network Class --------------------- #
 class Network(tnn.Module):
+    """
+    (Bi-directional, two layer LSTM) -> Dropout (p=0.5) -> Linear
+    """
     def __init__(self):
         super(Network, self).__init__()
         self.dropout_prob = 0.5
-        self.embedding_dim = 50
+        self.input_dim = 50
         self.hidden_dim = 170
-        self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
-        self.fc = tnn.Linear(self.hidden_dim*2, 1)
-        self.dropout = tnn.Dropout(p = self.dropout_prob)
+        self.lstm = tnn.LSTM(
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
+            batch_first=True,
+            bias=True,
+            dropout=self.dropout_prob,
+            num_layers=2,
+            bidirectional=True)
+        self.fc = tnn.Linear(
+            in_features=self.hidden_dim*2,
+            out_features=1)
+        self.dropout = tnn.Dropout(p=self.dropout_prob)
 
     def forward(self, input, length):
         batchSize, _, _ = input.size()
-        lstm_out,(hn,cn) = self.lstm(input)
+        lstm_out, (hn, cn) = self.lstm(input)
         hidden = self.dropout(torch.cat((hn[-2,:,:], hn[-1,:,:]), dim=1))
         out = self.fc(hidden.squeeze(0)).view(batchSize, -1)[:, -1]
         return out
 
 
+# --------------------- Preprocessing --------------------- #
 class PreProcessing():
     def pre(x):
         """Called after tokenization"""
@@ -45,6 +58,7 @@ class PreProcessing():
     text_field = data.Field(lower=True, tokenize=tokenizer, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
 
 
+# --------------------- Data Augmentation --------------------- #
 def rand_del(words, prob):
     result = []
     if len(words) == 1:
@@ -60,7 +74,6 @@ def rand_del(words, prob):
 
 def rand_swap(words, n):
     result = words.copy()
-
     for i in range(n):
         r1, r2, j = np.random.randint(0, len(words)), 0, 0
         for j in range(3):
@@ -75,14 +88,15 @@ def aug_sentence(text, label, text_field, label_field):
     augmented = []
     fields = [('text', text_field), ('label', label_field)]
     for i in range(2):
-        rd = rand_del(text, 0.3)
-        rs = rand_swap(text, max(1, int(0.2 * len(text))))
+        rd = rand_del(text, 0.5)
+        rs = rand_swap(text, max(1, int(0.5 * len(text))))
         rd_example = data.Example.fromlist([rd, label], fields)
         rs_example = data.Example.fromlist([rs, label], fields)
         augmented.extend([rd_example, rs_example])
     return augmented
-        
 
+
+# ----------------------- Loss Function ----------------------- #
 def lossFunc():
     """
     Define a loss function appropriate for the above networks that will
@@ -91,6 +105,7 @@ def lossFunc():
     return tnn.BCEWithLogitsLoss()
 
 
+# -------------------------- Training -------------------------- #
 def main():
     # Use a GPU if available, as it should be faster.
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -102,7 +117,7 @@ def main():
 
     train, dev = IMDB.splits(textField, labelField, train="train", validation="dev")
 
-    # Data augmentation
+    # Train using dev + training + augmented dataset
     train.examples.extend(dev.examples)
     aug_examples = []
     for i in train.examples:
@@ -113,7 +128,7 @@ def main():
     labelField.build_vocab(train, dev)
 
     trainLoader, testLoader = data.BucketIterator.splits((train, dev), shuffle=True, batch_size=64,
-                                                         sort_key=lambda x: len(x.text), sort_within_batch=True)
+                                                        sort_key=lambda x: len(x.text), sort_within_batch=True)
 
     net = Network().to(device)
     criterion =lossFunc()
@@ -160,7 +175,6 @@ def main():
     cpu_net.load_state_dict(torch.load('model.pth', map_location=torch.device(cpu_device)))
     torch.save(cpu_net.state_dict(), './model.pth')
     print("Saved model")
-
 
     # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
     # computations and reduce memory usage.
