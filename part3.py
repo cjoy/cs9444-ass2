@@ -15,20 +15,15 @@ class Network(tnn.Module):
         super(Network, self).__init__()
         self.dropout_prob = 0.5
         self.embedding_dim = 50
-        self.hidden_dim = 164
+        self.hidden_dim = 190
         self.lstm = tnn.LSTM(self.embedding_dim, self.hidden_dim, batch_first=True, bias=True, dropout=self.dropout_prob, num_layers=2, bidirectional=True)
         self.fc = tnn.Linear(self.hidden_dim*2, 1)
         self.dropout = tnn.Dropout(p = self.dropout_prob)
 
     def forward(self, input, length):
-        """
-        DO NOT MODIFY FUNCTION SIGNATURE
-        TODO:
-        Create the forward pass through the network.
-        """
         batchSize, _, _ = input.size()
-        lstm_out,(lstm_hid,lstm_cell) = self.lstm(input)
-        hidden = self.dropout(torch.cat((lstm_hid[-2,:,:], lstm_hid[-1,:,:]), dim=1))
+        lstm_out,(hn,cn) = self.lstm(input)
+        hidden = self.dropout(torch.cat((hn[-2,:,:], hn[-1,:,:]), dim=1))
         out = self.fc(hidden.squeeze(0)).view(batchSize, -1)[:, -1]
         return out
 
@@ -46,28 +41,6 @@ class PreProcessing():
         string = text.replace('<br />', ' ')
         string = "".join([ c if c.isalnum() else " " for c in string ])
         return string.split()
-
-#     stops = ['i', 'me', 'my', 'myself', 'we', 'our', 
-#                     'ours', 'ourselves', 'you', 'your', 'yours', 
-#                     'yourself', 'yourselves', 'he', 'him', 'his', 
-#                     'himself', 'she', 'her', 'hers', 'herself', 
-#                     'it', 'its', 'itself', 'they', 'them', 'their', 
-#                     'theirs', 'themselves', 'what', 'which', 'who', 
-#                     'whom', 'this', 'that', 'these', 'those', 'am', 
-#                     'is', 'are', 'was', 'were', 'be', 'been', 'being', 
-#                     'have', 'has', 'had', 'having', 'do', 'does', 'did',
-#                     'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or',
-#                     'because', 'as', 'until', 'while', 'of', 'at', 
-#                     'by', 'for', 'with', 'about', 'against', 'between',
-#                     'into', 'through', 'during', 'before', 'after', 
-#                     'above', 'below', 'to', 'from', 'up', 'down', 'in',
-#                     'out', 'on', 'off', 'over', 'under', 'again', 
-#                     'further', 'then', 'once', 'here', 'there', 'when', 
-#                     'where', 'why', 'how', 'all', 'any', 'both', 'each', 
-#                     'few', 'more', 'most', 'other', 'some', 'such', 'no', 
-#                     'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 
-#                     'very', 's', 't', 'can', 'will', 'just', 'don', 
-#                     'should', 'now', 'm', '']
 
     text_field = data.Field(lower=True, tokenize=tokenizer, include_lengths=True, batch_first=True, preprocessing=pre, postprocessing=post)
 
@@ -117,6 +90,7 @@ def lossFunc():
     """
     return tnn.BCEWithLogitsLoss()
 
+
 def main():
     # Use a GPU if available, as it should be faster.
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -128,16 +102,12 @@ def main():
 
     train, dev = IMDB.splits(textField, labelField, train="train", validation="dev")
 
+    # Data augmentation
+    train.examples.extend(dev.examples)
     aug_examples = []
-    for i in train.examples+dev.examples:
+    for i in train.examples:
         aug_examples.extend(aug_sentence(i.text, i.label, textField, labelField))
     train.examples.extend(aug_examples)
-
-    # aug_examples = []
-    # for i in train.examples:
-    #     aug_examples.extend(aug_sentence(i.text, i.label, textField, labelField))
-    # train.examples.extend(aug_examples)
-
 
     textField.build_vocab(train, dev, vectors=GloVe(name="6B", dim=50))
     labelField.build_vocab(train, dev)
@@ -147,11 +117,8 @@ def main():
 
     net = Network().to(device)
     criterion =lossFunc()
-    # optimiser = topti.Adam(net.parameters(), lr=0.001)  # Minimise the loss using the Adam algorithm.
     optimiser = topti.Adam(net.parameters(), lr=0.0003)  # Minimise the loss using the Adam algorithm.
-    # TODO: epoch 100 lr 0.0003
 
-    # for epoch in range(5):
     for epoch in range(10):
         running_loss = 0
 
@@ -187,7 +154,13 @@ def main():
 
     # Save mode
     torch.save(net.state_dict(), "./model.pth")
+    # Overide as CPU model
+    cpu_device = torch.device('cpu')
+    cpu_net = Network().to(cpu_device)
+    cpu_net.load_state_dict(torch.load('model.pth', map_location=torch.device(cpu_device)))
+    torch.save(cpu_net.state_dict(), './model.pth')
     print("Saved model")
+
 
     # Evaluate network on the test dataset.  We aren't calculating gradients, so disable autograd to speed up
     # computations and reduce memory usage.
